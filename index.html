@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AMAZONA FABULOSA · CRM</title>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Jost:wght@300;400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
@@ -243,10 +245,12 @@ tr:hover td{background:var(--surface)}
       <div class="nav-label">Operaciones</div>
       <div class="nav-item" onclick="navTo('ventas')"><i class="fa fa-shopping-bag"></i> Panel de Ventas</div>
       <div class="nav-item" onclick="navTo('cxc')"><i class="fa fa-file-invoice-dollar"></i> Cuentas x Cobrar</div>
+      <div class="nav-item" onclick="navTo('cxp')"><i class="fa fa-credit-card"></i> Cuentas x Pagar</div>
     </div>
     <div class="nav-section">
       <div class="nav-label">Inventario</div>
       <div class="nav-item" onclick="navTo('productos')"><i class="fa fa-gem"></i> Productos</div>
+      <div class="nav-item" onclick="navTo('stock')"><i class="fa fa-boxes"></i> Stock Actual</div>
       <div class="nav-item" onclick="navTo('precios')"><i class="fa fa-tags"></i> Lista de Precios</div>
     </div>
     <div class="nav-section">
@@ -296,6 +300,45 @@ tr:hover td{background:var(--surface)}
       <div class="card">
         <div class="card-title"><i class="fa fa-exclamation-circle" style="margin-right:8px;opacity:0.7"></i>Cuentas por Cobrar Pendientes</div>
         <div class="table-wrap" id="dashCXC"></div>
+      </div>
+    </div>
+
+    <!-- ===== CXP ===== -->
+    <div id="page-cxp" class="page">
+      <div class="page-title">Cuentas por Pagar</div>
+      <div class="page-sub">Compras a crédito pendientes de pago</div>
+      <div class="kpi-grid" id="cxpKpis"></div>
+      <div class="card">
+        <div class="search-bar">
+          <input type="text" placeholder="Buscar producto o proveedor..." id="searchCXP" oninput="renderCXP()">
+          <div style="font-size:0.82rem;color:var(--text-soft)">Total por pagar: <span id="totalCXPLabel" style="color:var(--rose);font-weight:600"></span></div>
+        </div>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Producto</th><th>Proveedor</th><th>N° Boleta</th><th>Fecha</th><th>Total Compra</th><th>Tarjeta</th><th>N° Cuotas</th><th>Valor Cuota</th><th>Monto Final</th><th>Estado</th></tr></thead>
+          <tbody id="cxpTbody"></tbody>
+        </table></div>
+      </div>
+    </div>
+
+    <!-- ===== STOCK ===== -->
+    <div id="page-stock" class="page">
+      <div class="page-title">Stock Actual</div>
+      <div class="page-sub">Inventario disponible en tiempo real</div>
+      <div class="kpi-grid" id="stockKpis"></div>
+      <div class="card">
+        <div class="search-bar">
+          <input type="text" placeholder="Buscar producto..." id="searchStock" oninput="renderStock()">
+          <select id="filterStockPage" onchange="renderStock()" style="background:var(--dark2);border:1px solid var(--border);padding:11px 14px;color:var(--text);font-family:'Jost',sans-serif;font-size:0.85rem;outline:none">
+            <option value="">Todos</option>
+            <option value="ok">Stock OK (≥3)</option>
+            <option value="bajo">Stock Bajo (1-2)</option>
+            <option value="agotado">Agotado (0)</option>
+          </select>
+        </div>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Producto</th><th>Proveedor</th><th style="min-width:130px">Stock Disponible</th><th>Costo Unit.</th><th>Precio Venta</th><th>Margen</th><th>Valor Stock</th><th>Últ. Ingreso</th></tr></thead>
+          <tbody id="stockTbody"></tbody>
+        </table></div>
       </div>
     </div>
 
@@ -622,13 +665,10 @@ tr:hover td{background:var(--surface)}
   </div>
 </div>
 
-<script type="module">
+<script>
 // =====================================================
 //  FIREBASE CONFIG
 // =====================================================
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getFirestore, collection, doc, setDoc, getDoc, getDocs, updateDoc, deleteDoc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-
 const firebaseConfig = {
   apiKey: "AIzaSyAc_IsWnhUUeaXusSp8Ul87IgKxJiJAsaE",
   authDomain: "a-crm-83169.firebaseapp.com",
@@ -637,8 +677,8 @@ const firebaseConfig = {
   messagingSenderId: "66263142727",
   appId: "1:66263142727:web:7b56763c01953ff2a23c62"
 };
-const firebaseApp = initializeApp(firebaseConfig);
-const db = getFirestore(firebaseApp);
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
 
 // =====================================================
 //  DATA EN MEMORIA (se sincroniza con Firestore)
@@ -718,78 +758,59 @@ function hideLoading(){const el=document.getElementById('loadingOverlay');if(el)
 // =====================================================
 //  FIREBASE HELPERS
 // =====================================================
-async function fsSet(col, id, data){await setDoc(doc(db,col,String(id)),data)}
-async function fsDel(col, id){await deleteDoc(doc(db,col,String(id)))}
-async function fsUpdate(col, id, data){await updateDoc(doc(db,col,String(id)),data)}
+async function fsSet(col, id, data){await db.collection(col).doc(String(id)).set(data)}
+async function fsDel(col, id){await db.collection(col).doc(String(id)).delete()}
+async function fsUpdate(col, id, data){await db.collection(col).doc(String(id)).update(data)}
 
 async function seedInitialData(){
   showLoading('Cargando datos...');
   try {
-    const snap = await getDocs(collection(db,'productos'));
+    const snap = await db.collection('productos').get();
     if(snap.empty){
       showLoading('Primera vez: cargando inventario inicial...');
-      for(const p of DB.productos){
-        await fsSet('productos', p.id, p);
-      }
-      for(const g of DB.gastos){
-        await fsSet('gastos', g.id, g);
-      }
-      for(const u of DB.users){
-        await fsSet('usuarios', u.id, u);
-      }
+      for(const p of DB.productos) await fsSet('productos', p.id, p);
+      for(const g of DB.gastos) await fsSet('gastos', g.id, g);
+      for(const u of DB.users) await fsSet('usuarios', u.id, u);
     }
-    const uSnap = await getDocs(collection(db,'usuarios'));
-    if(!uSnap.empty){
-      DB.users = uSnap.docs.map(d=>d.data());
-    } else {
-      for(const u of DB.users) await fsSet('usuarios',u.id,u);
-    }
+    const uSnap = await db.collection('usuarios').get();
+    if(!uSnap.empty) DB.users = uSnap.docs.map(d=>d.data());
+    else for(const u of DB.users) await fsSet('usuarios',u.id,u);
   } catch(e){console.error('seedInitialData error:',e)}
   hideLoading();
 }
 
 function subscribeAll(){
   unsubscribers.forEach(u=>u());unsubscribers=[];
-
-  const uProd = onSnapshot(collection(db,'productos'), snap=>{
-    DB.productos = snap.docs.map(d=>d.data());
-    const page=document.querySelector('.page.active');
-    if(page){
-      const id=page.id;
-      if(id==='page-productos')renderProductos();
-      if(id==='page-precios')renderPrecios();
-      if(id==='page-ventas')populateVentaSelect();
-      if(id==='page-dashboard')renderDashboard();
-    }
-  });
-  unsubscribers.push(uProd);
-
-  const uGasto = onSnapshot(collection(db,'gastos'), snap=>{
-    DB.gastos = snap.docs.map(d=>d.data());
-    const page=document.querySelector('.page.active');
-    if(page&&page.id==='page-gastos')renderGastos();
-    if(page&&page.id==='page-dashboard')renderDashboard();
-  });
-  unsubscribers.push(uGasto);
-
-  const uVenta = onSnapshot(collection(db,'ventas'), snap=>{
-    DB.ventas = snap.docs.map(d=>d.data());
-    const page=document.querySelector('.page.active');
-    if(page){
-      const id=page.id;
-      if(id==='page-ventas')renderVentas();
-      if(id==='page-cxc')renderCXC();
-      if(id==='page-dashboard')renderDashboard();
-    }
-  });
-  unsubscribers.push(uVenta);
-
-  const uUser = onSnapshot(collection(db,'usuarios'), snap=>{
-    DB.users = snap.docs.map(d=>d.data());
-    const page=document.querySelector('.page.active');
-    if(page&&page.id==='page-admin')renderAdmin();
-  });
-  unsubscribers.push(uUser);
+  unsubscribers.push(db.collection('productos').onSnapshot(snap=>{
+    DB.productos=snap.docs.map(d=>d.data());
+    const page=document.querySelector('.page.active');if(!page)return;
+    const id=page.id;
+    if(id==='page-productos')renderProductos();
+    if(id==='page-precios')renderPrecios();
+    if(id==='page-ventas')populateVentaSelect();
+    if(id==='page-dashboard')renderDashboard();
+    if(id==='page-stock')renderStock();
+    if(id==='page-cxp')renderCXP();
+  }));
+  unsubscribers.push(db.collection('gastos').onSnapshot(snap=>{
+    DB.gastos=snap.docs.map(d=>d.data());
+    const page=document.querySelector('.page.active');if(!page)return;
+    if(page.id==='page-gastos')renderGastos();
+    if(page.id==='page-dashboard')renderDashboard();
+  }));
+  unsubscribers.push(db.collection('ventas').onSnapshot(snap=>{
+    DB.ventas=snap.docs.map(d=>d.data());
+    const page=document.querySelector('.page.active');if(!page)return;
+    const id=page.id;
+    if(id==='page-ventas')renderVentas();
+    if(id==='page-cxc')renderCXC();
+    if(id==='page-dashboard')renderDashboard();
+  }));
+  unsubscribers.push(db.collection('usuarios').onSnapshot(snap=>{
+    DB.users=snap.docs.map(d=>d.data());
+    const page=document.querySelector('.page.active');if(!page)return;
+    if(page.id==='page-admin')renderAdmin();
+  }));
 }
 
 // =====================================================
@@ -801,7 +822,7 @@ async function doLogin(){
   if(!email||!pass){document.getElementById('loginError').textContent='Ingrese correo y contraseña.';return}
   showLoading('Verificando acceso...');
   try {
-    const snap = await getDocs(collection(db,'usuarios'));
+    const snap = await db.collection('usuarios').get();
     if(!snap.empty) DB.users = snap.docs.map(d=>d.data());
   } catch(e){}
   hideLoading();
@@ -842,6 +863,8 @@ function navTo(page){
   if(page==='precios')renderPrecios();
   if(page==='ventas'){populateVentaSelect();renderVentas()}
   if(page==='cxc')renderCXC();
+  if(page==='cxp')renderCXP();
+  if(page==='stock')renderStock();
   if(page==='admin')renderAdmin();
 }
 window.navTo = navTo;
@@ -1320,25 +1343,153 @@ async function toggleUserActive(id){
 window.toggleUserActive = toggleUserActive;
 
 // =====================================================
-//  DASHBOARD
+//  DASHBOARD COMPLETO
 // =====================================================
 let charts={};
+function destroyChart(id){if(charts[id]){charts[id].destroy();delete charts[id]}}
 function renderDashboard(){
-  const totalVentas=DB.ventas.reduce((s,v)=>s+v.total,0);
-  const totalCostos=DB.productos.reduce((s,p)=>s+((p.historial||[]).reduce((a,h)=>a+h.total,0)),0);
-  const kpiGrid = document.getElementById('kpiGrid');
-  if(kpiGrid) kpiGrid.innerHTML=`
-    <div class="kpi"><div class="kpi-label">Total Ventas</div><div class="kpi-value">${fmt(totalVentas)}</div></div>
-    <div class="kpi"><div class="kpi-label">Inversión Stock</div><div class="kpi-value">${fmt(totalCostos)}</div></div>`;
-  
-  if(charts.vcg) charts.vcg.destroy();
-  const ctg = document.getElementById('chartVCG');
-  if(ctg) {
-    charts.vcg = new Chart(ctg.getContext('2d'), {
-      type:'bar', data:{labels:['Ventas','Costos'], datasets:[{data:[totalVentas, totalCostos], backgroundColor:['#C9A84C','#7B9EC9']}]}
-    });
+  const totalVentas=DB.ventas.reduce((s,v)=>s+(v.total||0),0);
+  const totalRecuperado=DB.ventas.reduce((s,v)=>s+(v.abono||0),0);
+  const totalCostos=DB.productos.reduce((s,p)=>s+(p.historial||[]).reduce((a,h)=>a+(h.total||0),0),0);
+  const totalGastos=DB.gastos.reduce((s,g)=>s+(g.total||0),0);
+  const totalDeuda=DB.ventas.filter(v=>v.saldo>0).reduce((s,v)=>s+(v.saldo||0),0);
+  const margen=totalVentas?((totalVentas-totalCostos)/totalVentas*100).toFixed(1):0;
+
+  const kpiGrid=document.getElementById('kpiGrid');
+  if(kpiGrid)kpiGrid.innerHTML=`
+    <div class="kpi"><div class="kpi-icon"><i class="fa fa-shopping-bag"></i></div><div class="kpi-label">Total Ventas</div><div class="kpi-value">${fmt(totalVentas)}</div><div class="kpi-sub">${DB.ventas.length} transacciones</div></div>
+    <div class="kpi"><div class="kpi-icon"><i class="fa fa-check-circle"></i></div><div class="kpi-label">Recuperado</div><div class="kpi-value" style="color:var(--green)">${fmt(totalRecuperado)}</div><div class="kpi-sub">${totalVentas?((totalRecuperado/totalVentas)*100).toFixed(0):0}% del total</div></div>
+    <div class="kpi"><div class="kpi-icon"><i class="fa fa-chart-line"></i></div><div class="kpi-label">Margen de Venta</div><div class="kpi-value" style="color:${parseFloat(margen)>20?'var(--green)':'var(--rose)'}">${margen}%</div><div class="kpi-sub">Ganancia sobre precio venta</div></div>
+    <div class="kpi"><div class="kpi-icon"><i class="fa fa-box"></i></div><div class="kpi-label">Inversión Stock</div><div class="kpi-value">${fmt(totalCostos)}</div><div class="kpi-sub">${DB.productos.length} productos</div></div>
+    <div class="kpi"><div class="kpi-icon"><i class="fa fa-receipt"></i></div><div class="kpi-label">Total Gastos</div><div class="kpi-value" style="color:var(--rose)">${fmt(totalGastos)}</div></div>
+    <div class="kpi"><div class="kpi-icon"><i class="fa fa-clock"></i></div><div class="kpi-label">Cuentas x Cobrar</div><div class="kpi-value" style="color:var(--rose)">${fmt(totalDeuda)}</div><div class="kpi-sub">${DB.ventas.filter(v=>v.saldo>0).length} clientes</div></div>`;
+
+  // Gráfico Ventas vs Costos vs Gastos
+  destroyChart('vcg');
+  const c1=document.getElementById('chartVCG');
+  if(c1)charts.vcg=new Chart(c1.getContext('2d'),{type:'bar',data:{labels:['Ventas','Recuperado','Costos Stock','Gastos','Deuda Pend.'],datasets:[{data:[totalVentas,totalRecuperado,totalCostos,totalGastos,totalDeuda],backgroundColor:['rgba(201,168,76,0.7)','rgba(107,170,138,0.7)','rgba(123,158,201,0.7)','rgba(201,107,107,0.7)','rgba(201,107,107,0.4)'],borderWidth:1}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#B8A898',font:{size:10}},grid:{color:'rgba(255,255,255,0.04)'}},y:{ticks:{color:'#B8A898',font:{size:10},callback:v=>fmt(v)},grid:{color:'rgba(255,255,255,0.04)'}}}}});
+
+  // Gráfico Productos más vendidos
+  destroyChart('prod');
+  const prodVentas={};
+  DB.ventas.forEach(v=>{prodVentas[v.prodNombre]=(prodVentas[v.prodNombre]||0)+v.cantidad});
+  const sortedProd=Object.entries(prodVentas).sort((a,b)=>b[1]-a[1]).slice(0,6);
+  const c2=document.getElementById('chartProductos');
+  if(c2){
+    if(sortedProd.length){
+      charts.prod=new Chart(c2.getContext('2d'),{type:'doughnut',data:{labels:sortedProd.map(p=>p[0]),datasets:[{data:sortedProd.map(p=>p[1]),backgroundColor:['rgba(201,168,76,0.8)','rgba(107,170,138,0.8)','rgba(123,158,201,0.8)','rgba(201,107,107,0.8)','rgba(232,200,122,0.8)','rgba(201,168,76,0.5)'],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{color:'#B8A898',font:{size:10},boxWidth:12}}}}});
+    } else {
+      const ctx=c2.getContext('2d');ctx.clearRect(0,0,c2.width,c2.height);
+      ctx.fillStyle='rgba(184,168,152,0.4)';ctx.font='13px Jost';ctx.textAlign='center';
+      ctx.fillText('Sin ventas registradas',c2.width/2,c2.height/2);
+    }
   }
+
+  // Gráfico Evolución de ventas por fecha
+  destroyChart('evo');
+  const ventasPorFecha={};
+  DB.ventas.forEach(v=>{ventasPorFecha[v.fecha]=(ventasPorFecha[v.fecha]||0)+(v.total||0)});
+  const fechas=Object.keys(ventasPorFecha).sort();
+  const c3=document.getElementById('chartEvo');
+  if(c3)charts.evo=new Chart(c3.getContext('2d'),{type:'line',data:{labels:fechas.length?fechas:['Hoy'],datasets:[{label:'Ventas',data:fechas.length?fechas.map(f=>ventasPorFecha[f]):[0],borderColor:'#C9A84C',backgroundColor:'rgba(201,168,76,0.1)',borderWidth:2,fill:true,tension:0.4,pointBackgroundColor:'#C9A84C'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#B8A898',font:{size:10}},grid:{color:'rgba(255,255,255,0.04)'}},y:{ticks:{color:'#B8A898',font:{size:10},callback:v=>fmt(v)},grid:{color:'rgba(255,255,255,0.04)'}}}}});
+
+  // Gráfico Formas de pago
+  destroyChart('pago');
+  const pagos={};
+  DB.ventas.forEach(v=>{pagos[v.pago]=(pagos[v.pago]||0)+(v.total||0)});
+  const pLabels=Object.keys(pagos);
+  const c4=document.getElementById('chartPago');
+  if(c4)charts.pago=new Chart(c4.getContext('2d'),{type:'pie',data:{labels:pLabels.length?pLabels:['Sin datos'],datasets:[{data:pLabels.length?pLabels.map(k=>pagos[k]):[1],backgroundColor:['rgba(201,168,76,0.8)','rgba(107,170,138,0.8)','rgba(123,158,201,0.8)','rgba(201,107,107,0.8)','rgba(232,200,122,0.8)'],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{color:'#B8A898',font:{size:10},boxWidth:12}}}}});
+
+  // Tabla deuda por cliente en dashboard
+  const pend=DB.ventas.filter(v=>v.saldo>0).sort((a,b)=>b.saldo-a.saldo).slice(0,5);
+  const dashCXC=document.getElementById('dashCXC');
+  if(dashCXC)dashCXC.innerHTML=pend.length?`
+    <table><thead><tr><th>Cliente</th><th>Producto</th><th>Total</th><th>Saldo</th><th>Días</th></tr></thead>
+    <tbody>${pend.map(v=>`<tr>
+      <td><strong>${v.cliente}</strong></td><td>${v.prodNombre}</td>
+      <td>${fmt(v.total)}</td>
+      <td style="color:var(--rose);font-weight:600">${fmt(v.saldo)}</td>
+      <td>${daysDiff(v.fecha)} días</td>
+    </tr>`).join('')}</tbody></table>`
+    :'<div style="text-align:center;padding:30px;color:var(--text-soft)"><i class="fa fa-check-circle" style="font-size:2rem;color:var(--green);display:block;margin-bottom:10px"></i>Sin cuentas pendientes 🎉</div>';
 }
+
+// =====================================================
+//  CUENTAS POR PAGAR
+// =====================================================
+function renderCXP(){
+  const q=(document.getElementById('searchCXP')?document.getElementById('searchCXP').value:'').toLowerCase();
+  const compras=DB.productos.filter(p=>(p.pago==='CRÉDITO'||p.pago==='COMBINADA')&&p.creditInfo&&(!q||(p.nombre+p.proveedor).toLowerCase().includes(q)));
+  const total=compras.reduce((s,p)=>s+(p.creditInfo?.montoFinal||0),0);
+  const el=document.getElementById('totalCXPLabel');if(el)el.textContent=fmt(total);
+  const kpi=document.getElementById('cxpKpis');
+  if(kpi)kpi.innerHTML=`
+    <div class="kpi"><div class="kpi-icon"><i class="fa fa-credit-card"></i></div><div class="kpi-label">Compras a Crédito</div><div class="kpi-value">${compras.length}</div><div class="kpi-sub">Registros pendientes</div></div>
+    <div class="kpi"><div class="kpi-icon"><i class="fa fa-dollar-sign"></i></div><div class="kpi-label">Total por Pagar</div><div class="kpi-value" style="color:var(--rose)">${fmt(total)}</div><div class="kpi-sub">Con intereses incluidos</div></div>
+    <div class="kpi"><div class="kpi-icon"><i class="fa fa-calendar-alt"></i></div><div class="kpi-label">Total Cuotas</div><div class="kpi-value">${compras.reduce((s,p)=>s+(p.creditInfo?.cuotas||0),0)}</div><div class="kpi-sub">Cuotas comprometidas</div></div>`;
+  const tbody=document.getElementById('cxpTbody');if(!tbody)return;
+  tbody.innerHTML=compras.map(p=>`<tr>
+    <td><strong>${p.nombre}</strong></td>
+    <td>${p.proveedor||'—'}</td>
+    <td>${p.boleta||'—'}</td>
+    <td>${p.fecha}</td>
+    <td>${fmt((p.historial||[])[0]?.total||0)}</td>
+    <td><span class="badge badge-blue">${p.creditInfo?.tarjeta||'—'}</span></td>
+    <td style="text-align:center">${p.creditInfo?.cuotas||'—'}</td>
+    <td style="color:var(--gold-light)">${fmt(p.creditInfo?.montoFinal&&p.creditInfo?.cuotas?p.creditInfo.montoFinal/p.creditInfo.cuotas:0)}</td>
+    <td style="color:var(--rose);font-weight:600">${fmt(p.creditInfo?.montoFinal||0)}</td>
+    <td><span class="badge badge-gold">PENDIENTE</span></td>
+  </tr>`).join('')||'<tr><td colspan="10" style="text-align:center;color:var(--text-soft);padding:30px">Sin compras a crédito registradas ✅</td></tr>';
+}
+window.renderCXP=renderCXP;
+
+// =====================================================
+//  STOCK ACTUAL
+// =====================================================
+function renderStock(){
+  const q=(document.getElementById('searchStock')?document.getElementById('searchStock').value:'').toLowerCase();
+  const filtro=document.getElementById('filterStockPage')?document.getElementById('filterStockPage').value:'';
+  let rows=DB.productos.filter(p=>{
+    if(q&&!p.nombre.toLowerCase().includes(q))return false;
+    if(filtro==='ok'&&p.cantidad<3)return false;
+    if(filtro==='bajo'&&(p.cantidad===0||p.cantidad>=3))return false;
+    if(filtro==='agotado'&&p.cantidad!==0)return false;
+    return true;
+  }).sort((a,b)=>a.nombre.localeCompare(b.nombre));
+  const totalUnd=DB.productos.reduce((s,p)=>s+p.cantidad,0);
+  const totalVal=DB.productos.reduce((s,p)=>s+(p.cantidad*p.costo),0);
+  const agotados=DB.productos.filter(p=>p.cantidad===0).length;
+  const bajos=DB.productos.filter(p=>p.cantidad>0&&p.cantidad<3).length;
+  const kpi=document.getElementById('stockKpis');
+  if(kpi)kpi.innerHTML=`
+    <div class="kpi"><div class="kpi-icon"><i class="fa fa-boxes"></i></div><div class="kpi-label">Unidades en Stock</div><div class="kpi-value">${totalUnd}</div><div class="kpi-sub">${DB.productos.length} productos distintos</div></div>
+    <div class="kpi"><div class="kpi-icon"><i class="fa fa-dollar-sign"></i></div><div class="kpi-label">Valor Stock</div><div class="kpi-value">${fmt(totalVal)}</div><div class="kpi-sub">A precio de compra</div></div>
+    <div class="kpi"><div class="kpi-icon"><i class="fa fa-exclamation-triangle"></i></div><div class="kpi-label">Stock Bajo</div><div class="kpi-value" style="color:${bajos>0?'#E8B84A':'var(--green)'}">${bajos}</div><div class="kpi-sub">1-2 unidades</div></div>
+    <div class="kpi"><div class="kpi-icon"><i class="fa fa-times-circle"></i></div><div class="kpi-label">Agotados</div><div class="kpi-value" style="color:${agotados>0?'var(--rose)':'var(--green)'}">${agotados}</div><div class="kpi-sub">Sin stock disponible</div></div>`;
+  const tbody=document.getElementById('stockTbody');if(!tbody)return;
+  tbody.innerHTML=rows.map(p=>{
+    const margen=p.costo&&p.precioVenta?((p.precioVenta-p.costo)/p.precioVenta*100).toFixed(1):'0';
+    let badge,label;
+    if(p.cantidad===0){badge='badge-red';label='AGOTADO'}
+    else if(p.cantidad<=2){badge='badge-gold';label='BAJO'}
+    else{badge='badge-green';label='OK'}
+    return`<tr>
+      <td><strong>${p.nombre}</strong></td>
+      <td>${p.proveedor||'—'}</td>
+      <td><div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:1.1rem;font-weight:700;color:${p.cantidad===0?'var(--rose)':p.cantidad<=2?'#E8B84A':'var(--green)'}">${p.cantidad}</span>
+        <span class="badge ${badge}" style="font-size:0.62rem">${label}</span>
+      </div></td>
+      <td>${fmt(p.costo)}</td>
+      <td style="color:var(--gold-light);font-weight:600">${fmt(p.precioVenta)}</td>
+      <td style="color:${parseFloat(margen)>=30?'var(--green)':parseFloat(margen)>=15?'#E8B84A':'var(--rose)'}">${margen}%</td>
+      <td>${fmt(p.cantidad*p.costo)}</td>
+      <td>${p.fecha}</td>
+    </tr>`;
+  }).join('');
+}
+window.renderStock=renderStock;
 
 // =====================================================
 //  REPORTES
@@ -1390,6 +1541,9 @@ window.openAbono = openAbono;
 window.confirmAbono = confirmAbono;
 window.toggleUserActive = toggleUserActive;
 window.renderAdmin = renderAdmin;
+window.renderCXP = renderCXP;
+window.renderStock = renderStock;
+window.renderDashboard = renderDashboard;
 </script>
 </body>
 </html>
