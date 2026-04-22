@@ -265,8 +265,16 @@ tr:hover td{background:var(--surface)}
 
     <!-- ===== DASHBOARD ===== -->
     <div id="page-dashboard" class="page active">
-      <div class="page-title">Dashboard General</div>
-      <div class="page-sub">Resumen de la operación · Amazona Fabulosa</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:6px">
+        <div>
+          <div class="page-title">Dashboard General</div>
+          <div class="page-sub" style="margin-bottom:0">Resumen de la operación · Amazona Fabulosa</div>
+        </div>
+        <button class="btn btn-gold" onclick="exportarReporteCompleto()" style="gap:10px">
+          <i class="fa fa-file-excel"></i> Descargar Reporte Excel
+        </button>
+      </div>
+      <div id="exportAlert" style="margin-bottom:12px"></div>
       <div class="kpi-grid" id="kpiGrid"></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
         <div class="card">
@@ -457,7 +465,7 @@ tr:hover td{background:var(--surface)}
           <div class="form-group"><label>Total Venta ($)</label><input type="text" id="vTotal" readonly style="background:var(--dark3)"></div>
           <div class="form-group"><label>Forma de Pago</label>
             <select id="vPago" onchange="toggleVentaPago()">
-              <option>EFECTIVO</option><option>DÉBITO</option><option>CRÉDITO</option><option>COMBINADA</option><option>CRÉDITO CLIENTE</option>
+              <option>EFECTIVO</option><option>DÉBITO</option><option>CRÉDITO</option><option>COMBINADA</option><option>CRÉDITO CLIENTE</option><option>ABONO</option>
             </select>
           </div>
         </div>
@@ -473,9 +481,12 @@ tr:hover td{background:var(--surface)}
           </div>
         </div>
         <div id="combinadoFields">
-          <div style="font-size:0.75rem;color:var(--gold);margin-bottom:10px;letter-spacing:0.1em;text-transform:uppercase">Pago Combinado</div>
-          <div class="form-grid cols-3">
-            <div class="form-group"><label>Monto Pagado ($)</label><input type="number" id="vAbono" placeholder="0"></div>
+          <div id="combinadoTitle" style="font-size:0.75rem;color:var(--gold);margin-bottom:10px;letter-spacing:0.1em;text-transform:uppercase">Pago Combinado</div>
+          <div id="abonoInfo" style="display:none;margin-bottom:12px;padding:10px 14px;background:rgba(201,107,107,0.1);border-left:3px solid var(--rose);font-size:0.85rem;color:var(--text-soft)">
+            <i class="fa fa-info-circle" style="color:var(--rose);margin-right:6px"></i>El cliente <strong>no ha pagado nada aún</strong>. El total completo queda como deuda pendiente.
+          </div>
+          <div class="form-grid cols-3" id="combinadoMonto">
+            <div class="form-group"><label>Monto Pagado ($)</label><input type="number" id="vAbono" placeholder="0" oninput="calcVentaSaldo()"></div>
             <div class="form-group"><label>Medio Pago Parcial</label>
               <select id="vMedioParcial"><option>EFECTIVO</option><option>DÉBITO</option><option>TRANSFERENCIA</option></select>
             </div>
@@ -1208,7 +1219,12 @@ function calcVentaTotal(){
   const cant=parseFloat(document.getElementById('vCantidad').value)||1;
   const precio=parseFloat(document.getElementById('vPrecio').value)||0;
   document.getElementById('vTotal').value=fmt(cant*precio);
-  calcVentaSaldo();
+  const pago=document.getElementById('vPago').value;
+  if(pago==='ABONO'){
+    document.getElementById('vSaldo').value=fmt(cant*precio);
+  } else {
+    calcVentaSaldo();
+  }
 }
 window.calcVentaTotal=calcVentaTotal;
 function calcVentaSaldo(){
@@ -1224,7 +1240,27 @@ function calcVentaCuota(){
 function toggleVentaPago(){
   const v=document.getElementById('vPago').value;
   document.getElementById('creditFields').style.display=v==='CRÉDITO'?'block':'none';
-  document.getElementById('combinadoFields').style.display=(v==='COMBINADA'||v==='CRÉDITO CLIENTE')?'block':'none';
+  const showComb=(v==='COMBINADA'||v==='CRÉDITO CLIENTE'||v==='ABONO');
+  document.getElementById('combinadoFields').style.display=showComb?'block':'none';
+  if(showComb){
+    // Título dinámico
+    const titulo=document.getElementById('combinadoTitle');
+    const infoAbono=document.getElementById('abonoInfo');
+    const montoFields=document.getElementById('combinadoMonto');
+    if(v==='ABONO'){
+      titulo.textContent='Venta a Crédito (Sin pago inicial)';
+      infoAbono.style.display='block';
+      montoFields.style.display='none';
+      // Saldo = total completo
+      const total=parseFloat((document.getElementById('vTotal').value||'').replace(/[^0-9]/g,''))||0;
+      document.getElementById('vSaldo').value=fmt(total);
+    } else {
+      titulo.textContent='Pago Combinado / Parcial';
+      infoAbono.style.display='none';
+      montoFields.style.display='grid';
+      calcVentaSaldo();
+    }
+  }
 }
 window.toggleVentaPago=toggleVentaPago;
 async function addVenta(){
@@ -1239,7 +1275,10 @@ async function addVenta(){
   if(prod.cantidad<cant){showAlert('ventaAlert',`Stock insuficiente. Disponible: ${prod.cantidad}`,'error');return}
   const total=cant*precio;
   let abono=total,saldo=0;
-  if(pago==='COMBINADA'||pago==='CRÉDITO CLIENTE'){
+  if(pago==='ABONO'){
+    abono=0;
+    saldo=total;
+  } else if(pago==='COMBINADA'||pago==='CRÉDITO CLIENTE'){
     abono=parseFloat(document.getElementById('vAbono').value)||0;
     saldo=Math.max(0,total-abono);
   }
@@ -1448,7 +1487,217 @@ function renderDashboard(){
   const dashCXC=document.getElementById('dashCXC');
   if(dashCXC)dashCXC.innerHTML=pend.length?`<table><thead><tr><th>Cliente</th><th>Producto</th><th>Total</th><th>Saldo</th><th>Días</th></tr></thead><tbody>${pend.map(v=>`<tr><td><strong>${v.cliente}</strong></td><td>${v.prodNombre}</td><td>${fmt(v.total)}</td><td style="color:var(--rose);font-weight:600">${fmt(v.saldo)}</td><td>${daysDiff(v.fecha)} días</td></tr>`).join('')}</tbody></table>`:'<div style="text-align:center;padding:30px;color:var(--text-soft)"><i class="fa fa-check-circle" style="font-size:2rem;color:var(--green);display:block;margin-bottom:10px"></i>Sin cuentas pendientes 🎉</div>';
 }
-window.renderDashboard=renderDashboard;
-</script>
+// =====================================================
+//  EXPORTAR REPORTE EXCEL COMPLETO
+// =====================================================
+function exportarReporteCompleto(){
+  showLoading('Generando reporte Excel...');
+  try {
+    // ---- HELPERS ----
+    const hoy = new Date().toLocaleDateString('es-CL');
+    const fmtNum = n => (n||0).toLocaleString('es-CL');
+    const fmtPct = n => (n||0).toFixed(1)+'%';
+
+    // ---- CALCULOS RESUMEN ----
+    const totalVentas = DB.ventas.reduce((s,v)=>s+(v.total||0),0);
+    const totalRecuperado = DB.ventas.reduce((s,v)=>s+(v.abono||0),0);
+    const totalDeuda = DB.ventas.filter(v=>v.saldo>0).reduce((s,v)=>s+(v.saldo||0),0);
+    const totalCostos = DB.productos.reduce((s,p)=>s+(p.historial||[]).reduce((a,h)=>a+(h.total||0),0),0);
+    const totalGastos = DB.gastos.reduce((s,g)=>s+(g.total||0),0);
+    const margenBruto = totalVentas?((totalVentas-totalCostos)/totalVentas*100).toFixed(1):0;
+    const utilidad = totalVentas - totalCostos - totalGastos;
+
+    // ---- CONSTRUIR CSV POR HOJAS ----
+    // Como Excel no se puede generar nativamente sin librerías pesadas,
+    // generamos un archivo HTML con múltiples tablas que Excel abre perfectamente
+    const estilos = `
+      <style>
+        body{font-family:Calibri,sans-serif;font-size:11pt}
+        h1{color:#8B6914;font-size:16pt;margin:10px 0 4px}
+        h2{color:#8B6914;font-size:13pt;margin:20px 0 6px;border-bottom:2px solid #C9A84C;padding-bottom:4px}
+        .subtitulo{color:#666;font-size:10pt;margin-bottom:16px}
+        table{border-collapse:collapse;width:100%;margin-bottom:24px;font-size:10pt}
+        th{background:#1A1410;color:#E8C97A;padding:8px 12px;text-align:left;border:1px solid #C9A84C;font-weight:600}
+        td{padding:7px 12px;border:1px solid #ddd;vertical-align:middle}
+        tr:nth-child(even) td{background:#FFF8EE}
+        tr:hover td{background:#FFF0CC}
+        .num{text-align:right;font-family:Calibri}
+        .gold{color:#8B6914;font-weight:600}
+        .green{color:#2D6B4A;font-weight:600}
+        .red{color:#8B2020;font-weight:600}
+        .kpi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px}
+        .kpi{background:#FFF8EE;border:2px solid #C9A84C;padding:14px;border-radius:4px}
+        .kpi-label{font-size:9pt;color:#666;text-transform:uppercase;letter-spacing:1px}
+        .kpi-value{font-size:18pt;color:#8B6914;font-weight:700;margin:4px 0}
+        .kpi-sub{font-size:9pt;color:#999}
+        .badge{display:inline-block;padding:2px 8px;border-radius:3px;font-size:9pt;font-weight:600}
+        .badge-green{background:#d4edda;color:#155724}
+        .badge-red{background:#f8d7da;color:#721c24}
+        .badge-gold{background:#fff3cd;color:#856404}
+        .page-break{page-break-before:always;margin-top:40px}
+        .footer{color:#999;font-size:9pt;text-align:center;margin-top:30px;border-top:1px solid #eee;padding-top:10px}
+      </style>`;
+
+    // HOJA 1: RESUMEN EJECUTIVO
+    const resumen = `
+      <h2>📊 Resumen Ejecutivo</h2>
+      <p class="subtitulo">Generado el ${hoy} · Amazona Fabulosa CRM</p>
+      <div class="kpi-grid">
+        <div class="kpi"><div class="kpi-label">Total Ventas</div><div class="kpi-value">$${fmtNum(totalVentas)}</div><div class="kpi-sub">${DB.ventas.length} transacciones</div></div>
+        <div class="kpi"><div class="kpi-label">Recuperado</div><div class="kpi-value" style="color:#2D6B4A">$${fmtNum(totalRecuperado)}</div><div class="kpi-sub">${totalVentas?((totalRecuperado/totalVentas)*100).toFixed(0):0}% del total</div></div>
+        <div class="kpi"><div class="kpi-label">Cuentas por Cobrar</div><div class="kpi-value" style="color:#8B2020">$${fmtNum(totalDeuda)}</div><div class="kpi-sub">${DB.ventas.filter(v=>v.saldo>0).length} clientes</div></div>
+        <div class="kpi"><div class="kpi-label">Inversión en Stock</div><div class="kpi-value">$${fmtNum(totalCostos)}</div><div class="kpi-sub">${DB.productos.length} productos</div></div>
+        <div class="kpi"><div class="kpi-label">Total Gastos</div><div class="kpi-value" style="color:#8B2020">$${fmtNum(totalGastos)}</div><div class="kpi-sub">Gastos operacionales</div></div>
+        <div class="kpi"><div class="kpi-label">Margen Bruto</div><div class="kpi-value" style="color:${parseFloat(margenBruto)>20?'#2D6B4A':'#8B2020'}">${margenBruto}%</div><div class="kpi-sub">Sobre ventas totales</div></div>
+      </div>
+      <table>
+        <thead><tr><th>Indicador</th><th class="num">Monto ($)</th></tr></thead>
+        <tbody>
+          <tr><td>Total Ventas</td><td class="num gold">$${fmtNum(totalVentas)}</td></tr>
+          <tr><td>(-) Costo de Productos Vendidos</td><td class="num red">-$${fmtNum(totalCostos)}</td></tr>
+          <tr><td>(-) Gastos Operacionales</td><td class="num red">-$${fmtNum(totalGastos)}</td></tr>
+          <tr style="background:#FFF0CC"><td><strong>= Utilidad Neta</strong></td><td class="num ${utilidad>=0?'green':'red'}"><strong>$${fmtNum(utilidad)}</strong></td></tr>
+          <tr><td>Margen Bruto</td><td class="num">${margenBruto}%</td></tr>
+          <tr><td>Total Recuperado</td><td class="num green">$${fmtNum(totalRecuperado)}</td></tr>
+          <tr><td>Pendiente por Cobrar</td><td class="num red">$${fmtNum(totalDeuda)}</td></tr>
+        </tbody>
+      </table>`;
+
+    // HOJA 2: VENTAS
+    const ventasRows = DB.ventas.sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(v=>`
+      <tr>
+        <td>${v.fecha}</td>
+        <td>${v.cliente}</td>
+        <td>${v.prodNombre}</td>
+        <td class="num">${v.cantidad}</td>
+        <td class="num">$${fmtNum(v.precio)}</td>
+        <td class="num gold">$${fmtNum(v.total)}</td>
+        <td>${v.pago}</td>
+        <td class="num green">$${fmtNum(v.abono)}</td>
+        <td class="num ${v.saldo>0?'red':'green'}">$${fmtNum(v.saldo)}</td>
+        <td><span class="badge ${v.estado==='PAGADO'?'badge-green':'badge-red'}">${v.estado}</span></td>
+      </tr>`).join('');
+    const ventas = `
+      <div class="page-break">
+      <h2>🛒 Registro de Ventas</h2>
+      <p class="subtitulo">Total: $${fmtNum(totalVentas)} · ${DB.ventas.length} transacciones</p>
+      <table>
+        <thead><tr><th>Fecha</th><th>Cliente</th><th>Producto</th><th class="num">Cant.</th><th class="num">P.Unit</th><th class="num">Total</th><th>Forma Pago</th><th class="num">Abonado</th><th class="num">Saldo</th><th>Estado</th></tr></thead>
+        <tbody>${ventasRows||'<tr><td colspan="10" style="text-align:center;color:#999">Sin ventas registradas</td></tr>'}</tbody>
+      </table></div>`;
+
+    // HOJA 3: GASTOS
+    const gastosRows = DB.gastos.sort((a,b)=>b.fecha.localeCompare(a.fecha)).map(g=>`
+      <tr>
+        <td>${g.fecha}</td>
+        <td>${g.boleta||'—'}</td>
+        <td>${g.tipo}</td>
+        <td>${g.detalle}</td>
+        <td class="num">${g.cantidad}</td>
+        <td class="num">$${fmtNum(g.precio)}</td>
+        <td class="num gold">$${fmtNum(g.total)}</td>
+        <td class="num">${g.iva?'$'+fmtNum(g.iva):'—'}</td>
+        <td class="num">${g.iva?'$'+fmtNum(g.neto):'—'}</td>
+        <td>${g.pago}</td>
+      </tr>`).join('');
+    const gastos = `
+      <div class="page-break">
+      <h2>🧾 Registro de Gastos</h2>
+      <p class="subtitulo">Total: $${fmtNum(totalGastos)} · ${DB.gastos.length} registros</p>
+      <table>
+        <thead><tr><th>Fecha</th><th>N° Doc</th><th>Tipo</th><th>Detalle</th><th class="num">Cant.</th><th class="num">P.Unit</th><th class="num">Total</th><th class="num">IVA</th><th class="num">Neto</th><th>Pago</th></tr></thead>
+        <tbody>${gastosRows||'<tr><td colspan="10" style="text-align:center;color:#999">Sin gastos registrados</td></tr>'}</tbody>
+      </table></div>`;
+
+    // HOJA 4: INVENTARIO
+    const vendidoPorProd={};
+    DB.ventas.forEach(v=>{vendidoPorProd[v.prodId]=(vendidoPorProd[v.prodId]||0)+v.cantidad});
+    const totalValStock = DB.productos.reduce((s,p)=>s+(p.cantidad*p.costo),0);
+    const inventarioRows = DB.productos.map(p=>{
+      const margen = p.costo&&p.precioVenta?((p.precioVenta-p.costo)/p.precioVenta*100).toFixed(1):0;
+      const vendido = vendidoPorProd[p.id]||0;
+      const comprado = (p.historial||[]).reduce((s,h)=>s+h.cantidad,0);
+      const valStock = p.cantidad*p.costo;
+      const est = p.cantidad===0?'AGOTADO':p.cantidad<=2?'BAJO':'OK';
+      const bc = p.cantidad===0?'badge-red':p.cantidad<=2?'badge-gold':'badge-green';
+      return`<tr>
+        <td>${p.nombre}</td>
+        <td>${p.proveedor||'—'}</td>
+        <td class="num">${comprado}</td>
+        <td class="num">${vendido}</td>
+        <td class="num"><strong>${p.cantidad}</strong></td>
+        <td><span class="badge ${bc}">${est}</span></td>
+        <td class="num">$${fmtNum(p.costo)}</td>
+        <td class="num gold">$${fmtNum(p.precioVenta)}</td>
+        <td class="num">${margen}%</td>
+        <td class="num">$${fmtNum(valStock)}</td>
+        <td>${p.fecha}</td>
+      </tr>`;
+    }).join('');
+    const inventario = `
+      <div class="page-break">
+      <h2>📦 Inventario de Productos</h2>
+      <p class="subtitulo">Valor total stock: $${fmtNum(totalValStock)} · ${DB.productos.length} productos</p>
+      <table>
+        <thead><tr><th>Producto</th><th>Proveedor</th><th class="num">Comprado</th><th class="num">Vendido</th><th class="num">Stock</th><th>Estado</th><th class="num">Costo Unit.</th><th class="num">Precio Venta</th><th class="num">Margen</th><th class="num">Val. Stock</th><th>Últ. Ingreso</th></tr></thead>
+        <tbody>${inventarioRows}</tbody>
+        <tfoot><tr style="background:#FFF0CC"><td colspan="9"><strong>TOTAL VALOR STOCK</strong></td><td class="num gold"><strong>$${fmtNum(totalValStock)}</strong></td><td></td></tr></tfoot>
+      </table></div>`;
+
+    // HOJA 5: CUENTAS POR COBRAR
+    const pendientes = DB.ventas.filter(v=>v.saldo>0).sort((a,b)=>b.saldo-a.saldo);
+    const cxcRows = pendientes.map(v=>{
+      const dias = daysDiff(v.fecha);
+      const est = dias>30?'URGENTE':dias>15?'EN MORA':'AL DÍA';
+      const bc = dias>30?'badge-red':dias>15?'badge-gold':'badge-green';
+      return`<tr>
+        <td>${v.cliente}</td>
+        <td>${v.prodNombre}</td>
+        <td>${v.fecha}</td>
+        <td class="num">$${fmtNum(v.total)}</td>
+        <td class="num green">$${fmtNum(v.abono)}</td>
+        <td class="num red"><strong>$${fmtNum(v.saldo)}</strong></td>
+        <td class="num">${dias}</td>
+        <td><span class="badge ${bc}">${est}</span></td>
+      </tr>`;
+    }).join('');
+    const cxc = `
+      <div class="page-break">
+      <h2>💳 Cuentas por Cobrar</h2>
+      <p class="subtitulo">Total pendiente: $${fmtNum(totalDeuda)} · ${pendientes.length} clientes</p>
+      <table>
+        <thead><tr><th>Cliente</th><th>Producto</th><th>Fecha Venta</th><th class="num">Total Venta</th><th class="num">Abonado</th><th class="num">Saldo</th><th class="num">Días</th><th>Estado</th></tr></thead>
+        <tbody>${cxcRows||'<tr><td colspan="8" style="text-align:center;color:#999">Sin cuentas pendientes ✅</td></tr>'}</tbody>
+        <tfoot><tr style="background:#FFF0CC"><td colspan="5"><strong>TOTAL PENDIENTE</strong></td><td class="num red"><strong>$${fmtNum(totalDeuda)}</strong></td><td colspan="2"></td></tr></tfoot>
+      </table></div>`;
+
+    // ENSAMBLAR DOCUMENTO COMPLETO
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Reporte Amazona Fabulosa · ${hoy}</title>${estilos}</head><body>
+      <h1>💎 AMAZONA FABULOSA · Reporte Completo</h1>
+      <p class="subtitulo">Fecha de generación: ${hoy} · Usuario: ${currentUser?currentUser.name:'—'}</p>
+      ${resumen}${ventas}${gastos}${inventario}${cxc}
+      <div class="footer">Amazona Fabulosa CRM · Reporte generado el ${hoy}</div>
+    </body></html>`;
+
+    // DESCARGAR
+    const blob = new Blob([html], {type:'application/vnd.ms-excel;charset=utf-8'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Reporte_AmazonaFabulosa_${new Date().toISOString().split('T')[0]}.xls`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showAlert('exportAlert','✅ Reporte descargado correctamente. Ábrelo con Excel.');
+  } catch(e) {
+    showAlert('exportAlert','Error al generar reporte: '+e.message,'error');
+    console.error(e);
+  }
+  hideLoading();
+}
+window.exportarReporteCompleto = exportarReporteCompleto;
+
+
 </body>
 </html>
