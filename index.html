@@ -4,218 +4,114 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AMAZONA FABULOSA · CRM</title>
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Jost:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400&family=Jost:wght@300;400;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
-:root {
-  --gold: #C9A84C; --gold-light: #E8C97A; --gold-pale: #F5E6C0; --black: #0D0D0D; --dark: #1A1410;
-  --dark2: #241E18; --dark3: #2E2720; --mid: #4A3F35; --text: #F0E8D8; --text-soft: #B8A898;
-  --rose: #C97B7B; --green: #6BAA8A; --blue: #7B9EC9; --red: #C96B6B; --surface: rgba(255,255,255,0.04);
-  --surface2: rgba(255,255,255,0.07); --border: rgba(201,168,76,0.2); --border2: rgba(201,168,76,0.4);
-}
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Jost',sans-serif;background:var(--black);color:var(--text);min-height:100vh;overflow-x:hidden}
-#loginScreen{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:var(--black)}
-.login-box{position:relative;background:var(--dark);border:1px solid var(--border2);padding:60px 50px;width:440px;text-align:center}
-.login-logo{font-family:'Cormorant Garamond',serif;font-size:2.4rem;font-weight:300;letter-spacing:0.15em;color:var(--gold);margin-bottom:4px}
-.login-logo span{color:var(--text);font-style:italic}
-.login-sub{font-size:0.7rem;letter-spacing:0.4em;text-transform:uppercase;color:var(--text-soft);margin-bottom:40px}
-.login-form input{width:100%;background:var(--dark2);border:1px solid var(--border);padding:14px 18px;color:var(--text);font-family:'Jost',sans-serif;font-size:0.9rem;margin-bottom:14px;outline:none}
-.login-form button{width:100%;background:var(--gold);color:var(--black);border:none;padding:15px;font-size:0.85rem;font-weight:600;letter-spacing:0.2em;text-transform:uppercase;cursor:pointer}
-#app{display:none;min-height:100vh}
-header{position:fixed;top:0;left:0;right:0;z-index:100;background:rgba(13,13,13,0.95);backdrop-filter:blur(10px);border-bottom:1px solid var(--border);padding:0 30px;height:64px;display:flex;align-items:center;justify-content:space-between}
-#sidebar{position:fixed;top:64px;left:0;bottom:0;width:240px;background:var(--dark);border-right:1px solid var(--border);overflow-y:auto;z-index:90;padding:20px 0}
-#main{margin-left:240px;margin-top:64px;padding:30px;min-height:calc(100vh - 64px);position:relative;z-index:1}
-.nav-item{display:flex;align-items:center;gap:12px;padding:11px 22px;cursor:pointer;font-size:0.85rem;color:var(--text-soft)}
-.nav-item.active{color:var(--gold);background:var(--surface2)}
-.page{display:none} .page.active{display:block}
-.card{background:var(--dark);border:1px solid var(--border);padding:24px;margin-bottom:20px}
-.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px}
-table{width:100%;border-collapse:collapse;font-size:0.85rem}
-th{padding:11px 14px;text-align:left;border-bottom:1px solid var(--border)}
-td{padding:11px 14px;border-bottom:1px solid rgba(255,255,255,0.04)}
+  :root { --gold: #C9A84C; --black: #0D0D0D; --dark: #1A1410; --text: #F0E8D8; --border: rgba(201,168,76,0.2); }
+  body { margin: 0; background: var(--black); color: var(--text); font-family: 'Jost', sans-serif; }
+  #loginScreen { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: var(--black); z-index: 1000; }
+  .login-box { background: var(--dark); border: 1px solid var(--border); padding: 40px; width: 350px; text-align: center; }
+  .login-logo { font-family: 'Cormorant Garamond', serif; font-size: 2rem; color: var(--gold); margin-bottom: 20px; }
+  input { width: 100%; padding: 12px; margin-bottom: 10px; background: #241E18; border: 1px solid var(--border); color: white; outline: none; }
+  button { width: 100%; padding: 12px; background: var(--gold); border: none; cursor: pointer; font-weight: 600; text-transform: uppercase; }
+  #app { display: none; padding: 20px; }
+  header { height: 60px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+  .card { background: var(--dark); border: 1px solid var(--border); padding: 20px; margin-bottom: 20px; overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  th { text-align: left; border-bottom: 1px solid var(--border); padding: 10px; color: var(--gold); }
+  td { padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.05); }
 </style>
 </head>
 <body>
 
 <div id="loginScreen">
   <div class="login-box">
-    <div style="font-size:2rem;margin-bottom:20px">💎</div>
     <div class="login-logo">AMAZONA <span>Fabulosa</span></div>
-    <div class="login-sub">Sistema de Gestión Comercial</div>
-    <div class="login-form">
-      <input type="email" id="loginEmail" placeholder="correo@amazona.cl">
-      <input type="password" id="loginPass" placeholder="Contraseña">
-      <button id="btnIngresar">Ingresar</button>
-      <div id="loginError" style="color:var(--rose);margin-top:10px;font-size:0.8rem"></div>
-    </div>
+    <input type="email" id="loginEmail" placeholder="juan@amazona.cl">
+    <input type="password" id="loginPass" placeholder="Contraseña">
+    <button id="btnEntrar">Ingresar</button>
+    <p id="errorMsg" style="color:#C97B7B; font-size: 0.8rem; margin-top: 10px;"></p>
   </div>
 </div>
 
 <div id="app">
   <header>
-    <div class="header-brand">AMAZONA <span>Fabulosa</span></div>
-    <div style="display:flex;align-items:center;gap:12px">
-      <div id="userInitials" style="width:34px;height:34px;background:var(--gold);border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--black);font-weight:600">--</div>
-      <div>
-        <div id="userName" style="font-weight:500;color:var(--text);font-size:0.8rem">Cargando...</div>
-        <div id="userRole" style="font-size:0.7rem;color:var(--text-soft)">Usuario</div>
-      </div>
-    </div>
+    <div style="font-family:'Cormorant Garamond'; font-size: 1.5rem; color: var(--gold);">AMAZONA FABULOSA</div>
+    <button onclick="location.reload()" style="width: auto; padding: 5px 15px;">Salir</button>
   </header>
-
-  <div id="sidebar">
-    <div class="nav-item active" onclick="navTo('dashboard')"><i class="fa fa-chart-pie"></i> Dashboard</div>
-    <div class="nav-item" onclick="navTo('productos')"><i class="fa fa-gem"></i> Inventario</div>
-  </div>
-
-  <div id="main">
-    <div id="page-dashboard" class="page active">
-      <h1 style="color:var(--gold);font-family:'Cormorant Garamond';margin-bottom:20px">Resumen General</h1>
-      <div class="kpi-grid" id="kpiGrid"></div>
-      <div class="card" style="margin-top:20px"><canvas id="chartMain" height="300"></canvas></div>
-    </div>
-
-    <div id="page-productos" class="page">
-      <h1 style="color:var(--gold);font-family:'Cormorant Garamond';margin-bottom:20px">Control de Inventario</h1>
-      <div class="card" style="overflow-x:auto">
-        <table>
-          <thead><tr><th>Producto</th><th>Stock</th><th>Costo</th><th>Venta</th><th>Proveedor</th></tr></thead>
-          <tbody id="productosTbody"></tbody>
-        </table>
-      </div>
-    </div>
+  
+  <div class="card">
+    <h2 style="color:var(--gold); margin-bottom: 15px;">Inventario de Joyas</h2>
+    <table>
+      <thead><tr><th>Producto</th><th>Stock</th><th>Costo</th><th>Venta</th><th>Proveedor</th></tr></thead>
+      <tbody id="listaProductos"></tbody>
+    </table>
   </div>
 </div>
 
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getFirestore } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+<script>
+  // TUS DATOS RECUPERADOS (33 PRODUCTOS)
+  const DATA = {
+    usuarios: [{email: 'juan@amazona.cl', pass: '12345'}, {email: 'kary@amazona.cl', pass: '12345'}],
+    productos: [
+      {id:1,n:'Anillo Grande',c:4,costo:15900,v:25990,p:'MSS'},
+      {id:2,n:'Anillo Chico',c:10,costo:6500,v:12990,p:'MSS'},
+      {id:3,n:'Anillo Delgado',c:3,costo:8500,v:14990,p:'MSS'},
+      {id:4,n:'Anillo Cuadrado Circón',c:1,costo:18990,v:25500,p:'MISJOYAS'},
+      {id:5,n:'Anillo Colores',c:4,costo:4900,v:12990,p:'MSS'},
+      {id:6,n:'Anillo Diseño Loro',c:3,costo:10500,v:18990,p:'MSS'},
+      {id:7,n:'Anillo Touch',c:2,costo:8500,v:15990,p:'MSS'},
+      {id:8,n:'Anillo Niña',c:2,costo:3900,v:6990,p:'MSS'},
+      {id:9,n:'Pulsera',c:4,costo:6900,v:12990,p:'MSS'},
+      {id:10,n:'Anillo',c:1,costo:7290,v:14990,p:'JOYAS ISIS'},
+      {id:11,n:'Anillo Microcircón',c:1,costo:12990,v:22990,p:'MISJOYAS'},
+      {id:12,n:'Conjunto Libélula',c:1,costo:14990,v:22980,p:'MISJOYAS'},
+      {id:13,n:'Colibrí Dije',c:1,costo:8590,v:15990,p:'MSS'},
+      {id:14,n:'Conjunto Estrella',c:1,costo:15590,v:27980,p:'JOYAS ISIS'},
+      {id:15,n:'San Expedito',c:1,costo:6990,v:12990,p:'MSS'},
+      {id:16,n:'Cruz',c:1,costo:4990,v:9990,p:'MSS'},
+      {id:17,n:'Noche de Gatos',c:1,costo:8590,v:15990,p:'MSS'},
+      {id:18,n:'Cruz Ángeles',c:1,costo:5990,v:10990,p:'MSS'},
+      {id:19,n:'Virgen',c:1,costo:6990,v:12990,p:'JOYAS ISIS'},
+      {id:20,n:'Dije Perrito',c:1,costo:7990,v:13990,p:'MSS'},
+      {id:21,n:'Cadena 40 cms',c:6,costo:3900,v:7990,p:'MISJOYAS'},
+      {id:22,n:'Cadena 50 cms',c:2,costo:6888,v:11990,p:'MISJOYAS'},
+      {id:23,n:'Dije Punta de Luz',c:7,costo:3900,v:6990,p:'MSS'},
+      {id:24,n:'Cadena 45 cms',c:3,costo:6492,v:9990,p:'MISJOYAS'},
+      {id:25,n:'Cadena Eslabón',c:2,costo:11163,v:17990,p:'JOYAS ISIS'},
+      {id:26,n:'Punto de Luz',c:2,costo:12990,v:20990,p:'MISJOYAS'},
+      {id:27,n:'Aros Colibrí',c:1,costo:7990,v:12990,p:'MSS'},
+      {id:28,n:'Punto Luz Morado',c:1,costo:6990,v:12990,p:'MSS'},
+      {id:29,n:'Collar Gatito',c:1,costo:13990,v:21990,p:'MISJOYAS'},
+      {id:30,n:'Dije Calibrí',c:1,costo:6990,v:12990,p:'MSS'},
+      {id:31,n:'Dije Mariposa',c:1,costo:7990,v:13990,p:'MSS'},
+      {id:32,n:'Dije Garrita',c:1,costo:12990,v:18990,p:'MSS'},
+      {id:33,n:'Cadena Trébol',c:1,costo:13990,v:19990,p:'MISJOYAS'}
+    ]
+  };
 
-const firebaseConfig = {
-  apiKey: "AIzaSyAc_IsWnhUUeaXusSp8Ul87IgKxJiJAsaE",
-  authDomain: "a-crm-83169.firebaseapp.com",
-  projectId: "a-crm-83169",
-  storageBucket: "a-crm-83169.firebasestorage.app",
-  messagingSenderId: "66263142727",
-  appId: "1:66263142727:web:7b56763c01953ff2a23c62"
-};
+  document.getElementById('btnEntrar').onclick = function() {
+    const email = document.getElementById('loginEmail').value;
+    const pass = document.getElementById('loginPass').value;
+    const user = DATA.usuarios.find(u => u.email === email && u.pass === pass);
 
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-
-const DB = {
-  users: [
-    {id:'u1',name:'Juan',email:'juan@amazona.cl',pass:'12345',role:'admin'},
-    {id:'u2',name:'Kary',email:'kary@amazona.cl',pass:'12345',role:'admin'}
-  ],
-  productos: [
-    {id:1,nombre:'Anillo Grande',cantidad:4,costo:15900,precioVenta:25990,proveedor:'MSS'},
-    {id:2,nombre:'Anillo Chico',cantidad:10,costo:6500,precioVenta:12990,proveedor:'MSS'},
-    {id:3,nombre:'Anillo Delgado',cantidad:3,costo:8500,precioVenta:14990,proveedor:'MSS'},
-    {id:4,nombre:'Anillo Cuadrado Circón',cantidad:1,costo:18990,precioVenta:25500,proveedor:'MISJOYAS'},
-    {id:5,nombre:'Anillo Colores',cantidad:4,costo:4900,precioVenta:12990,proveedor:'MSS'},
-    {id:6,nombre:'Anillo Diseño Loro',cantidad:3,costo:10500,precioVenta:18990,proveedor:'MSS'},
-    {id:7,nombre:'Anillo Touch',cantidad:2,costo:8500,precioVenta:15990,proveedor:'MSS'},
-    {id:8,nombre:'Anillo Niña',cantidad:2,costo:3900,precioVenta:6990,proveedor:'MSS'},
-    {id:9,nombre:'Pulsera',cantidad:4,costo:6900,precioVenta:12990,proveedor:'MSS'},
-    {id:10,nombre:'Anillo',cantidad:1,costo:7290,precioVenta:14990,proveedor:'JOYAS ISIS'},
-    {id:11,nombre:'Anillo Microcircón',cantidad:1,costo:12990,precioVenta:22990,proveedor:'MISJOYAS'},
-    {id:12,nombre:'Conjunto Libélula',cantidad:1,costo:14990,precioVenta:22980,proveedor:'MISJOYAS'},
-    {id:13,nombre:'Colibrí Dije',cantidad:1,costo:8590,precioVenta:15990,proveedor:'MSS'},
-    {id:14,nombre:'Conjunto Estrella',cantidad:1,costo:15590,precioVenta:27980,proveedor:'JOYAS ISIS'},
-    {id:15,nombre:'San Expedito',cantidad:1,costo:6990,precioVenta:12990,proveedor:'MSS'},
-    {id:16,nombre:'Cruz',cantidad:1,costo:4990,precioVenta:9990,proveedor:'MSS'},
-    {id:17,nombre:'Noche de Gatos',cantidad:1,costo:8590,precioVenta:15990,proveedor:'MSS'},
-    {id:18,nombre:'Cruz Ángeles',cantidad:1,costo:5990,precioVenta:10990,proveedor:'MSS'},
-    {id:19,nombre:'Virgen',cantidad:1,costo:6990,precioVenta:12990,proveedor:'JOYAS ISIS'},
-    {id:20,nombre:'Dije Perrito',cantidad:1,costo:7990,precioVenta:13990,proveedor:'MSS'},
-    {id:21,nombre:'Cadena 40 cms',cantidad:6,costo:3900,precioVenta:7990,proveedor:'MISJOYAS'},
-    {id:22,nombre:'Cadena 50 cms',cantidad:2,costo:6888,precioVenta:11990,proveedor:'MISJOYAS'},
-    {id:23,nombre:'Dije Punta de Luz',cantidad:7,costo:3900,precioVenta:6990,proveedor:'MSS'},
-    {id:24,nombre:'Cadena 45 cms',cantidad:3,costo:6492,precioVenta:9990,proveedor:'MISJOYAS'},
-    {id:25,nombre:'Cadena Eslabón',cantidad:2,costo:11163,precioVenta:17990,proveedor:'JOYAS ISIS'},
-    {id:26,nombre:'Punto de Luz',cantidad:2,costo:12990,precioVenta:20990,proveedor:'MISJOYAS'},
-    {id:27,nombre:'Aros Colibrí',cantidad:1,costo:7990,precioVenta:12990,proveedor:'MSS'},
-    {id:28,nombre:'Punto Luz Morado',cantidad:1,costo:6990,precioVenta:12990,proveedor:'MSS'},
-    {id:29,nombre:'Collar Gatito',cantidad:1,costo:13990,precioVenta:21990,proveedor:'MISJOYAS'},
-    {id:30,nombre:'Dije Calibrí',cantidad:1,costo:6990,precioVenta:12990,proveedor:'MSS'},
-    {id:31,nombre:'Dije Mariposa',cantidad:1,costo:7990,precioVenta:13990,proveedor:'MSS'},
-    {id:32,nombre:'Dije Garrita',cantidad:1,costo:12990,precioVenta:18990,proveedor:'MSS'},
-    {id:33,nombre:'Cadena Trébol',cantidad:1,costo:13990,precioVenta:19990,proveedor:'MISJOYAS'}
-  ],
-  gastos: [
-    {id:1,fecha:'2026-04-18',detalle:'Combustible',total:40000},
-    {id:2,fecha:'2026-04-18',detalle:'Almuerzo',total:30000},
-    {id:3,fecha:'2026-04-18',detalle:'Estacionamiento',total:9000}
-  ]
-};
-
-window.navTo = (page) => {
-  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  document.getElementById('page-' + page).classList.add('active');
-  if(page === 'productos') renderProductos();
-};
-
-function renderProductos() {
-  const tbody = document.getElementById('productosTbody');
-  tbody.innerHTML = DB.productos.map(p => `
-    <tr>
-      <td><strong>${p.nombre}</strong></td>
-      <td>${p.cantidad} unidades</td>
-      <td>$${p.costo.toLocaleString()}</td>
-      <td>$${p.precioVenta.toLocaleString()}</td>
-      <td>${p.proveedor}</td>
-    </tr>`).join('');
-}
-
-function renderDashboard() {
-  const stockValor = DB.productos.reduce((s,p) => s + (p.precioVenta * p.cantidad), 0);
-  const inversionTotal = DB.productos.reduce((s,p) => s + (p.costo * p.cantidad), 0);
-  const gastosTotal = DB.gastos.reduce((s,g) => s + g.total, 0);
-
-  document.getElementById('kpiGrid').innerHTML = `
-    <div class="card">
-      <div style="font-size:0.7rem;color:var(--text-soft)">VALOR EN VITRINA</div>
-      <div style="font-size:1.6rem;color:var(--gold)">$${stockValor.toLocaleString()}</div>
-    </div>
-    <div class="card">
-      <div style="font-size:0.7rem;color:var(--text-soft)">INVERSIÓN REAL</div>
-      <div style="font-size:1.6rem;color:var(--text)">$${inversionTotal.toLocaleString()}</div>
-    </div>
-  `;
-
-  new Chart(document.getElementById('chartMain'), {
-    type: 'bar',
-    data: {
-      labels: ['Ventas Potenciales', 'Inversión', 'Gastos Acum.'],
-      datasets: [{
-        data: [stockValor, inversionTotal, gastosTotal],
-        backgroundColor: ['#C9A84C', '#7B9EC9', '#C96B6B']
-      }]
-    },
-    options: { plugins: { legend: { display: false } } }
-  });
-}
-
-async function doLogin() {
-  const email = document.getElementById('loginEmail').value;
-  const pass = document.getElementById('loginPass').value;
-  const user = DB.users.find(u => u.email === email && u.pass === pass);
-
-  if (user) {
-    document.getElementById('loginScreen').style.display = 'none';
-    document.getElementById('app').style.display = 'block';
-    document.getElementById('userName').innerText = user.name;
-    document.getElementById('userInitials').innerText = user.name.substring(0,2).toUpperCase();
-    renderDashboard();
-  } else {
-    document.getElementById('loginError').innerText = "Credenciales inválidas";
-  }
-}
-
-document.getElementById('btnIngresar').addEventListener('click', doLogin);
+    if(user) {
+      document.getElementById('loginScreen').style.display = 'none';
+      document.getElementById('app').style.display = 'block';
+      const tbody = document.getElementById('listaProductos');
+      tbody.innerHTML = DATA.productos.map(p => `
+        <tr>
+          <td><strong>${p.n}</strong></td>
+          <td>${p.c} uds</td>
+          <td>$${p.costo.toLocaleString()}</td>
+          <td>$${p.v.toLocaleString()}</td>
+          <td>${p.p}</td>
+        </tr>`).join('');
+    } else {
+      document.getElementById('errorMsg').innerText = "Credenciales incorrectas";
+    }
+  };
 </script>
 </body>
 </html>
