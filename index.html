@@ -8,7 +8,6 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
-/* ... (Mantenemos todo tu estilo visual original) ... */
 :root {
   --gold: #C9A84C; --gold-light: #E8C97A; --gold-pale: #F5E6C0; --black: #0D0D0D; --dark: #1A1410;
   --dark2: #241E18; --dark3: #2E2720; --mid: #4A3F35; --text: #F0E8D8; --text-soft: #B8A898;
@@ -17,7 +16,6 @@
 }
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:'Jost',sans-serif;background:var(--black);color:var(--text);min-height:100vh;overflow-x:hidden}
-/* ... (Estilos del login y app shell que ya tenías) ... */
 #loginScreen{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:var(--black)}
 .login-box{position:relative;background:var(--dark);border:1px solid var(--border2);padding:60px 50px;width:440px;text-align:center}
 .login-logo{font-family:'Cormorant Garamond',serif;font-size:2.4rem;font-weight:300;letter-spacing:0.15em;color:var(--gold);margin-bottom:4px}
@@ -37,8 +35,6 @@ header{position:fixed;top:0;left:0;right:0;z-index:100;background:rgba(13,13,13,
 table{width:100%;border-collapse:collapse;font-size:0.85rem}
 th{padding:11px 14px;text-align:left;border-bottom:1px solid var(--border)}
 td{padding:11px 14px;border-bottom:1px solid rgba(255,255,255,0.04)}
-.btn{border:none;padding:12px 24px;cursor:pointer;text-transform:uppercase;font-size:0.8rem}
-.btn-gold{background:var(--gold);color:var(--black)}
 </style>
 </head>
 <body>
@@ -52,7 +48,7 @@ td{padding:11px 14px;border-bottom:1px solid rgba(255,255,255,0.04)}
       <input type="email" id="loginEmail" placeholder="correo@amazona.cl">
       <input type="password" id="loginPass" placeholder="Contraseña">
       <button id="btnIngresar">Ingresar</button>
-      <div id="loginError" style="color:var(--rose);margin-top:10px"></div>
+      <div id="loginError" style="color:var(--rose);margin-top:10px;font-size:0.8rem"></div>
     </div>
   </div>
 </div>
@@ -61,33 +57,31 @@ td{padding:11px 14px;border-bottom:1px solid rgba(255,255,255,0.04)}
   <header>
     <div class="header-brand">AMAZONA <span>Fabulosa</span></div>
     <div style="display:flex;align-items:center;gap:12px">
-      <div style="width:34px;height:34px;background:var(--gold);border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--black);font-weight:600">JU</div>
+      <div id="userInitials" style="width:34px;height:34px;background:var(--gold);border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--black);font-weight:600">--</div>
       <div>
-        <div style="font-weight:500;color:var(--text);font-size:0.8rem">Juan</div>
-        <div style="font-size:0.7rem;color:var(--text-soft)">Administrador</div>
+        <div id="userName" style="font-weight:500;color:var(--text);font-size:0.8rem">Cargando...</div>
+        <div id="userRole" style="font-size:0.7rem;color:var(--text-soft)">Usuario</div>
       </div>
-      <button onclick="location.reload()" style="background:none;border:1px solid var(--border);color:var(--text-soft);padding:6px 12px">Salir</button>
     </div>
   </header>
 
   <div id="sidebar">
     <div class="nav-item active" onclick="navTo('dashboard')"><i class="fa fa-chart-pie"></i> Dashboard</div>
-    <div class="nav-item" onclick="navTo('productos')"><i class="fa fa-gem"></i> Productos</div>
-    <div class="nav-item" onclick="navTo('ventas')"><i class="fa fa-shopping-bag"></i> Ventas</div>
+    <div class="nav-item" onclick="navTo('productos')"><i class="fa fa-gem"></i> Inventario</div>
   </div>
 
   <div id="main">
     <div id="page-dashboard" class="page active">
-      <h1 style="color:var(--gold);font-family:'Cormorant Garamond';margin-bottom:20px">Dashboard</h1>
+      <h1 style="color:var(--gold);font-family:'Cormorant Garamond';margin-bottom:20px">Resumen General</h1>
       <div class="kpi-grid" id="kpiGrid"></div>
-      <div class="card" style="margin-top:20px"><canvas id="chartVCG" height="300"></canvas></div>
+      <div class="card" style="margin-top:20px"><canvas id="chartMain" height="300"></canvas></div>
     </div>
 
     <div id="page-productos" class="page">
-      <h1 style="color:var(--gold);font-family:'Cormorant Garamond';margin-bottom:20px">Inventario</h1>
-      <div class="card">
+      <h1 style="color:var(--gold);font-family:'Cormorant Garamond';margin-bottom:20px">Control de Inventario</h1>
+      <div class="card" style="overflow-x:auto">
         <table>
-          <thead><tr><th>Producto</th><th>Stock</th><th>Costo</th><th>Precio Venta</th><th>Proveedor</th></tr></thead>
+          <thead><tr><th>Producto</th><th>Stock</th><th>Costo</th><th>Venta</th><th>Proveedor</th></tr></thead>
           <tbody id="productosTbody"></tbody>
         </table>
       </div>
@@ -97,7 +91,7 @@ td{padding:11px 14px;border-bottom:1px solid rgba(255,255,255,0.04)}
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getFirestore, collection, doc, setDoc, getDocs } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { getFirestore } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyAc_IsWnhUUeaXusSp8Ul87IgKxJiJAsaE",
@@ -111,11 +105,10 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-// === AQUÍ HE RESTAURADO TODA TU INFORMACIÓN ORIGINAL ===
 const DB = {
   users: [
-    {id:'u1',name:'Juan',email:'juan@amazona.cl',pass:'12345',role:'admin',active:true},
-    {id:'u2',name:'Kary',email:'kary@amazona.cl',pass:'12345',role:'admin',active:true}
+    {id:'u1',name:'Juan',email:'juan@amazona.cl',pass:'12345',role:'admin'},
+    {id:'u2',name:'Kary',email:'kary@amazona.cl',pass:'12345',role:'admin'}
   ],
   productos: [
     {id:1,nombre:'Anillo Grande',cantidad:4,costo:15900,precioVenta:25990,proveedor:'MSS'},
@@ -159,20 +152,18 @@ const DB = {
   ]
 };
 
-// Navegación
 window.navTo = (page) => {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.getElementById('page-' + page).classList.add('active');
   if(page === 'productos') renderProductos();
 };
 
-// Renderizado de tablas
 function renderProductos() {
   const tbody = document.getElementById('productosTbody');
   tbody.innerHTML = DB.productos.map(p => `
     <tr>
       <td><strong>${p.nombre}</strong></td>
-      <td>${p.cantidad}</td>
+      <td>${p.cantidad} unidades</td>
       <td>$${p.costo.toLocaleString()}</td>
       <td>$${p.precioVenta.toLocaleString()}</td>
       <td>${p.proveedor}</td>
@@ -180,34 +171,34 @@ function renderProductos() {
 }
 
 function renderDashboard() {
-  const totalVentas = DB.productos.reduce((s,p) => s + (p.precioVenta * p.cantidad), 0);
-  const totalCostos = DB.productos.reduce((s,p) => s + (p.costo * p.cantidad), 0);
-  const totalGastos = DB.gastos.reduce((s,g) => s + g.total, 0);
+  const stockValor = DB.productos.reduce((s,p) => s + (p.precioVenta * p.cantidad), 0);
+  const inversionTotal = DB.productos.reduce((s,p) => s + (p.costo * p.cantidad), 0);
+  const gastosTotal = DB.gastos.reduce((s,g) => s + g.total, 0);
 
   document.getElementById('kpiGrid').innerHTML = `
-    <div class="kpi" style="background:var(--dark);padding:20px;border:1px solid var(--border)">
-      <div style="font-size:0.7rem;color:var(--text-soft)">VALOR INVENTARIO</div>
-      <div style="font-size:1.8rem;color:var(--gold)">$${totalVentas.toLocaleString()}</div>
+    <div class="card">
+      <div style="font-size:0.7rem;color:var(--text-soft)">VALOR EN VITRINA</div>
+      <div style="font-size:1.6rem;color:var(--gold)">$${stockValor.toLocaleString()}</div>
     </div>
-    <div class="kpi" style="background:var(--dark);padding:20px;border:1px solid var(--border)">
-      <div style="font-size:0.7rem;color:var(--text-soft)">INVERSIÓN TOTAL</div>
-      <div style="font-size:1.8rem;color:var(--text)">$${totalCostos.toLocaleString()}</div>
+    <div class="card">
+      <div style="font-size:0.7rem;color:var(--text-soft)">INVERSIÓN REAL</div>
+      <div style="font-size:1.6rem;color:var(--text)">$${inversionTotal.toLocaleString()}</div>
     </div>
   `;
 
-  new Chart(document.getElementById('chartVCG'), {
+  new Chart(document.getElementById('chartMain'), {
     type: 'bar',
     data: {
-      labels: ['Inventario', 'Inversión', 'Gastos'],
+      labels: ['Ventas Potenciales', 'Inversión', 'Gastos Acum.'],
       datasets: [{
-        data: [totalVentas, totalCostos, totalGastos],
+        data: [stockValor, inversionTotal, gastosTotal],
         backgroundColor: ['#C9A84C', '#7B9EC9', '#C96B6B']
       }]
-    }
+    },
+    options: { plugins: { legend: { display: false } } }
   });
 }
 
-// Login
 async function doLogin() {
   const email = document.getElementById('loginEmail').value;
   const pass = document.getElementById('loginPass').value;
@@ -216,9 +207,11 @@ async function doLogin() {
   if (user) {
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('app').style.display = 'block';
+    document.getElementById('userName').innerText = user.name;
+    document.getElementById('userInitials').innerText = user.name.substring(0,2).toUpperCase();
     renderDashboard();
   } else {
-    document.getElementById('loginError').textContent = "Usuario o clave incorrectos";
+    document.getElementById('loginError').innerText = "Credenciales inválidas";
   }
 }
 
