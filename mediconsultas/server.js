@@ -1,5 +1,7 @@
 // MEDICONSULTAS - servidor
-// Express + Claude API (streaming) con base de conocimiento por áreas médicas.
+// Express + IA (Gemini gratis o Claude) en streaming, con base de conocimiento por áreas médicas.
+// Proveedor: si existe GEMINI_API_KEY se usa Gemini (plan gratuito de Google, sin tarjeta);
+// si existe ANTHROPIC_API_KEY se usa Claude (pagado); si no hay ninguna, modo demostración.
 
 const path = require("path");
 const express = require("express");
@@ -8,12 +10,16 @@ const AREAS = require("./data/areas");
 
 const PORT = process.env.PORT || 3000;
 const MODEL = process.env.CLAUDE_MODEL || "claude-opus-5-5";
-const HAS_KEY = Boolean(process.env.ANTHROPIC_API_KEY);
+const GEMINI_KEY = process.env.GEMINI_API_KEY || "";
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+const GEMINI_MODEL_RESPALDO = "gemini-flash-latest";
+const PROVEEDOR = GEMINI_KEY ? "gemini" : process.env.ANTHROPIC_API_KEY ? "claude" : "demo";
+const HAS_KEY = PROVEEDOR !== "demo";
 const MAX_IMAGES = 3;
 const MAX_IMAGE_BYTES = 4.5 * 1024 * 1024; // por imagen, ya en base64 decodificado
 const ALLOWED_MEDIA = ["image/jpeg", "image/png", "image/webp", "image/gif"];
 
-const client = HAS_KEY ? new Anthropic() : null;
+const client = PROVEEDOR === "claude" ? new Anthropic() : null;
 const app = express();
 app.disable("x-powered-by");
 app.use(express.json({ limit: "20mb" }));
@@ -168,6 +174,78 @@ function construirMensajes(historial) {
   return mensajes;
 }
 
+// ---------- Gemini (Google, plan gratuito) ----------
+
+// Convierte los mensajes (formato interno) al formato de Gemini.
+function aGemini(mensajes) {
+  return mensajes.map((m) => {
+    const bloques = typeof m.content === "string" ? [{ type: "text", text: m.content }] : m.content;
+    const parts = bloques.map((b) =>
+      b.type === "image"
+        ? { inline_data: { mime_type: b.source.media_type, data: b.source.data } }
+        : { text: b.text }
+    );
+    return { role: m.role === "assistant" ? "model" : "user", parts };
+  });
+}
+
+async function llamarGemini(modelo, cuerpo, signal) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelo)}:streamGenerateContent?alt=sse`;
+  return fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-goog-api-key": GEMINI_KEY },
+    body: JSON.stringify(cuerpo),
+    signal
+  });
+}
+
+async function responderGemini(mensajes, alTexto, signal) {
+  const cuerpo = {
+    systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+    contents: aGemini(mensajes),
+    generationConfig: { maxOutputTokens: 4096, temperature: 0.4 }
+  };
+  let resp = await llamarGemini(GEMINI_MODEL, cuerpo, signal);
+  // Si el modelo configurado ya no existe, usar el alias del Flash más reciente.
+  if (resp.status === 404 && GEMINI_MODEL !== GEMINI_MODEL_RESPALDO) {
+    console.warn(`Modelo ${GEMINI_MODEL} no disponible; usando ${GEMINI_MODEL_RESPALDO}`);
+    resp = await llamarGemini(GEMINI_MODEL_RESPALDO, cuerpo, signal);
+  }
+  if (!resp.ok || !resp.body) {
+    const detalle = await resp.text().catch(() => "");
+    const e = new Error(`Gemini ${resp.status}: ${detalle.slice(0, 300)}`);
+    e.status = resp.status;
+    throw e;
+  }
+  const lector = resp.body.getReader();
+  const dec = new TextDecoder();
+  let buf = "";
+  let bloqueado = false;
+  for (;;) {
+    const { value, done } = await lector.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    let i;
+    while ((i = buf.indexOf("\n")) >= 0) {
+      const linea = buf.slice(0, i).trim();
+      buf = buf.slice(i + 1);
+      if (!linea.startsWith("data:")) continue;
+      let d;
+      try {
+        d = JSON.parse(linea.slice(5));
+      } catch {
+        continue;
+      }
+      const cand = d.candidates?.[0];
+      for (const part of cand?.content?.parts || []) if (part.text && !part.thought) alTexto(part.text);
+      if (d.promptFeedback?.blockReason || cand?.finishReason === "SAFETY") bloqueado = true;
+    }
+  }
+  if (bloqueado) {
+    alTexto("\n\nNo pude completar esta respuesta. Por favor reformula tu consulta o llama a Salud Responde: 600 360 7777.");
+  }
+}
+
 // ---------- rutas ----------
 
 app.get("/healthz", (_req, res) => res.json({ ok: true }));
@@ -204,7 +282,7 @@ app.post("/api/consulta", async (req, res) => {
     enviar("delta", {
       text:
         `[[AREA:${a.id}|URGENCIA:${emergencia ? "emergencia" : "control"}]]\n` +
-        `**Modo demostración:** la IA aún no está activada (falta configurar ANTHROPIC_API_KEY en Render).\n\n` +
+        `**Modo demostración:** la IA aún no está activada (falta configurar GEMINI_API_KEY en Render).\n\n` +
         `Mientras tanto, revisa la ficha del área **${a.nombre}** en el panel izquierdo.\n\n` +
         `**Señales de alarma**\n${a.alarmas.map((x) => `- ${x}`).join("\n")}`
     });
@@ -222,6 +300,29 @@ app.post("/api/consulta", async (req, res) => {
   res.on("close", () => {
     cerrado = true;
   });
+
+  if (PROVEEDOR === "gemini") {
+    const control = new AbortController();
+    res.on("close", () => {
+      if (!res.writableEnded) control.abort();
+    });
+    try {
+      await responderGemini(mensajes, (t) => !cerrado && enviar("delta", { text: t }), control.signal);
+      if (!cerrado) {
+        enviar("fin", {});
+        res.end();
+      }
+    } catch (err) {
+      if (cerrado) return;
+      console.error("Error Gemini:", err.status, err.message);
+      let mensaje = "Hubo un problema al procesar tu consulta. Intenta nuevamente.";
+      if (err.status === 429) mensaje = "Se alcanzó el límite gratuito de consultas por minuto. Espera un momento e intenta de nuevo.";
+      else if (err.status === 400 || err.status === 403) mensaje = "La clave de la IA no es válida o no tiene permiso. Revisa GEMINI_API_KEY en Render.";
+      enviar("error", { error: mensaje });
+      res.end();
+    }
+    return;
+  }
 
   try {
     const stream = client.beta.messages.stream({
@@ -267,5 +368,5 @@ app.post("/api/consulta", async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`MEDICONSULTAS escuchando en puerto ${PORT} (IA ${HAS_KEY ? "activa" : "en modo demostración"})`);
+  console.log(`MEDICONSULTAS escuchando en puerto ${PORT} (IA: ${PROVEEDOR})`);
 });
